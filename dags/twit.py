@@ -1,6 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
-from airflow.operators.postgres_operator import PostgresOperator
+from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.operators.bash import BashOperator
 import snscrape.modules.twitter as sntwitter
 import pandas as pd
@@ -10,26 +10,12 @@ import time
 from dotenv import dotenv_values
 from sqlalchemy import create_engine, inspect
 
-#CONFIG = dotenv_values('.env')
-#if not CONFIG:
-#    CONFIG = os.environ
-#
-#connection_uri = "postgresql+psycopg2://{}:{}@{}:{}".format(
-#    CONFIG["POSTGRES_USER"],
-#    CONFIG["POSTGRES_PASSWORD"],
-#    CONFIG['POSTGRES_HOST'],
-#    CONFIG["POSTGRES_PORT"],
-#)
-#
-#engine = create_engine(connection_uri, pool_pre_ping=True)
-#engine.connect()
+dagpath = os.getcwd()
 
-#AIRFLOW_HOME = os.getenv('AIRFLOW_HOME')
-
-def extract_tweet_data():
+def extract_tweet_data(**kwargs):
 	location = "1.352083, 103.819839, 20km"
 	curr = int(time.time())
-	dt = datetime.fromtimestamp(curr)
+	dt = datetime.fromtimestamp(curr).strftime("%Y-%m-%d_%H%M")
 	tweets = []
 	for i, tweet in enumerate(
 		sntwitter.TwitterSearchScraper(
@@ -38,9 +24,27 @@ def extract_tweet_data():
 		):
 		if i > 100:
 			break
-		tweets.append([tweet.id, tweet.date, tweet.content, tweet.user.username])
-	df = pd.DataFrame(tweets, columns=["id", "datetime", "content", "user"])
-	df.to_csv(f'data/{dt}.csv')
+		tweets.append([tweet.id,
+		 		tweet.date,
+				tweet.content,
+				tweet.user.username, 
+				tweet.retweetCount, 
+				tweet.likeCount])
+	df = pd.DataFrame(tweets, columns=["id", "datetime", "content", "username", "retweets", "likes"])
+	if not os.path.exists(f"{dagpath}/processed_data"):
+		os.mkdir(f"{dagpath}/processed_data")
+	df.to_csv(f'{dagpath}/processed_data/{dt}.csv', 
+		index=False, 
+		header=True	
+		)
+	task_instance = kwargs['task_instance']
+	task_instance.xcom_push(key='filename',value=f'{dagpath}/processed_data/{dt}.csv')
+	
+
+def remove_tempdata(**kwargs):
+	task_instance = kwargs['ti']
+	os.remove({{task_instance.xcom_pull(task_ids='extract_tweets', key='filename')}})
+
 
 default_args = {
 	"owner" : "airflow",
@@ -54,6 +58,7 @@ dag = DAG(
 	default_args= default_args,
 	schedule_interval= "0 * * * *",
 	max_active_runs=1,
+	catchup=False
 )
 
 create_table = PostgresOperator(
@@ -63,8 +68,30 @@ create_table = PostgresOperator(
 	postgres_conn_id="postgres_tweets",
 )
 
+
 extract_tweets = PythonOperator(
 	dag=dag,
 	task_id="extract_tweets",
-	python_callable=extract_tweet_data
+	python_callable=extract_tweet_data,
+	provide_context=True
 )
+
+load_tweets = PostgresOperator(
+	dag=dag,
+	task_id="load_tweets",
+	sql="./scripts/sql/load_tweets.sql",
+#	parameters={
+#		"filename": {{task_instance.xcom_pull(task_ids='extract_tweets',key='filename')}}
+#	}
+	postgres_conn_id="postgres_tweets",
+)
+
+remove_tempdata = PythonOperator(
+	dag=dag,
+	task_id="remove_temp_files",
+	python_callable=remove_tempdata,
+	#op_args=[filename],
+	provide_context=True
+)
+
+create_table >> extract_tweets >> load_tweets >> remove_tempdata
