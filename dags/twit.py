@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.bash import BashOperator
 import snscrape.modules.twitter as sntwitter
 import pandas as pd
@@ -40,6 +41,24 @@ def extract_tweet_data(**kwargs):
 	task_instance = kwargs['task_instance']
 	task_instance.xcom_push(key='filename',value=f'{dagpath}/processed_data/{dt}.csv')
 	
+def load_data(**kwargs):
+	pg_hook = PostgresHook(postgres_conn_id="postgres_tweets")
+	task_instance = kwargs['task_instance']
+	filename = task_instance.xcom_pull(task_ids='extract_tweets', key='filename')
+	df = pd.read_csv(filename)
+	engine = create_engine('postgresql://postgres:postgres@database/tweets')
+	df.to_sql("tempdata", engine, index=False)
+	insert_sql= """
+			INSERT INTO tweets(id, date_time, content, username, retweetCount, likeCount)
+			SELECT *
+			FROM tempdata
+			WHERE id NOT IN (
+				SELECT id FROM tweets
+			);
+			DROP TABLE tempdata;
+		    """
+	pg_hook.run(insert_sql)
+	
 
 def remove_tempdata(**kwargs):
 	task_instance = kwargs['ti']
@@ -76,14 +95,11 @@ extract_tweets = PythonOperator(
 	provide_context=True
 )
 
-load_tweets = PostgresOperator(
+load_tweets = PythonOperator(
 	dag=dag,
 	task_id="load_tweets",
-	sql="./scripts/sql/load_tweets.sql",
-#	parameters={
-#		"filename": {{task_instance.xcom_pull(task_ids='extract_tweets',key='filename')}}
-#	}
-	postgres_conn_id="postgres_tweets",
+	python_callable=load_data,
+	provide_context=True
 )
 
 remove_tempdata = PythonOperator(
