@@ -1,0 +1,5 @@
+set POSTGRES_DB=tweets
+set POSTGRES_USER=postgres
+set POSTGRES_PASSWORD=postgres
+set POSTGRES_HOST=database
+set POSTGRES_PORT=5432
