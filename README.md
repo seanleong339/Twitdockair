@@ -4,7 +4,7 @@ A simple ETL(Extract, Transform, Load) Data pipeline project, using Apache Airfl
 
 Twitdockair is a simple ETL project I started to familiarise with setting up Apache Airflow on Docker, as well as utilising Airflow as an orchestrator to build DAGs for a data pipeline. The current schedule of the pipeline is set to run every hour, and extracts 100 tweets at a time. However if you want to do any further processing of the data, it would be better to export the data to a tool like Spark.
 
-![alt text](https://github.com/seanleong339/Twitdockair/tree/main/images/ui.png "ui")
+![alt text](/images/ui.png "ui")
 
 The pipeline runs in 4 steps:
 
