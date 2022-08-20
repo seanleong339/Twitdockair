@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timedelta
 import time
 from dotenv import dotenv_values
-from sqlalchemy import create_engine, inspect
+import sqlalchemy
 
 dagpath = os.getcwd()
 
@@ -25,13 +25,16 @@ def extract_tweet_data(**kwargs):
 		):
 		if i > 100:
 			break
-		tweets.append([tweet.id,
+		tweets.append([str(tweet.id),
 		 		tweet.date,
 				tweet.content,
 				tweet.user.username, 
 				tweet.retweetCount, 
 				tweet.likeCount])
 	df = pd.DataFrame(tweets, columns=["id", "datetime", "content", "username", "retweets", "likes"])
+	df['created_date'] = pd.to_datetime(df['datetime']).dt.date
+	df['created_time'] = pd.to_datetime(df['datetime']).dt.time
+	del df['datetime']
 	if not os.path.exists(f"{dagpath}/processed_data"):
 		os.mkdir(f"{dagpath}/processed_data")
 	df.to_csv(f'{dagpath}/processed_data/{dt}.csv', 
@@ -46,23 +49,24 @@ def load_data(**kwargs):
 	task_instance = kwargs['task_instance']
 	filename = task_instance.xcom_pull(task_ids='extract_tweets', key='filename')
 	df = pd.read_csv(filename)
-	engine = create_engine('postgresql://postgres:postgres@database/tweets')
-	df.to_sql("tempdata", engine, index=False)
-	insert_sql= """
-			INSERT INTO tweets(id, date_time, content, username, retweetCount, likeCount)
-			SELECT *
-			FROM tempdata
-			WHERE id NOT IN (
-				SELECT id FROM tweets
-			);
-			DROP TABLE tempdata;
-		    """
+	engine = sqlalchemy.create_engine('postgresql://postgres:postgres@database/tweets')
+	df['id'] = df['id'].astype(str)
+	df.to_sql("tempdata", engine, index=False, if_exists="replace", 
+			dtype= {'id': sqlalchemy.types.String(),
+				'created_date': sqlalchemy.types.Date(),
+				'created_time': sqlalchemy.types.Time(),
+				'content': sqlalchemy.types.String(),
+				'username': sqlalchemy.types.String(),
+				'retweetCount': sqlalchemy.types.Integer(),
+				'likeCount': sqlalchemy.types.Integer()})
+	insert_sql = open(f"{os.getcwd()}/dags/scripts/sql/load_tweets.sql")
+	insert_sql= insert_sql.read()
 	pg_hook.run(insert_sql)
 	
 
 def remove_tempdata(**kwargs):
 	task_instance = kwargs['ti']
-	os.remove({{task_instance.xcom_pull(task_ids='extract_tweets', key='filename')}})
+	os.remove(task_instance.xcom_pull(task_ids='extract_tweets', key='filename'))
 
 
 default_args = {
@@ -102,12 +106,12 @@ load_tweets = PythonOperator(
 	provide_context=True
 )
 
-remove_tempdata = PythonOperator(
+cleanup_temp = PythonOperator(
 	dag=dag,
-	task_id="remove_temp_files",
+	task_id="cleanup_temp",
 	python_callable=remove_tempdata,
 	#op_args=[filename],
 	provide_context=True
 )
 
-create_table >> extract_tweets >> load_tweets >> remove_tempdata
+create_table >> extract_tweets >> load_tweets >> cleanup_temp
