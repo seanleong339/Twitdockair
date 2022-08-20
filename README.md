@@ -2,7 +2,9 @@
 
 A simple ETL(Extract, Transform, Load) Data pipeline project, using Apache Airflow on Docker.
 
-Twitdockair is a simple ETL project I started to familiarise with setting up Apache Airflow on Docker, as well as utilising Airflow as an orchestrator to build DAGs for a data pipeline. The current schedule of the pipeline is set to run every hour, and extracts 100 tweets at a time. This data pipeline will extract tweets and do simple data processing. However if you want to do any further processing of the data, it would be better to export the data to a tool like Spark. Potential features to be added in the future include connecting to an AWS S3 bucket, and integration with Spark.
+Twitdockair is a simple ETL project I started to familiarise with setting up Apache Airflow on Docker, as well as utilising Airflow as an orchestrator to build DAGs for a data pipeline. The current schedule of the pipeline is set to run every hour, and extracts 100 tweets at a time. However if you want to do any further processing of the data, it would be better to export the data to a tool like Spark.
+
+![alt text](https://github.com/seanleong339/Twitdockair/tree/main/images/ui.png "ui")
 
 The pipeline runs in 4 steps:
 
@@ -33,7 +35,7 @@ docker-compose --env-file ./.env -f ./postgres-docker-compose.yaml up -d
 docker-compose -f airflow-docker-compose.yaml up -d
 docker-compose -f postgres-docker-compose.yaml up -d
 ```
-In Windows, run the batch file 'start.bat'
+In Windows, run the batch file 'start.bat' in folder 'run'
 
 2. Go to 'localhost:8080' in your browser, and use the username 'admin' password 'airflow' to access the Airflow GUI
 3. When done with the pipeline, clean up and shut down by running 
@@ -41,4 +43,4 @@ In Windows, run the batch file 'start.bat'
 docker-compose -f airflow-docker-compose.yaml down --volumes --rmi all
 docker-compose -f postgres-docker-compose.yaml down --volumes --rmi all
 ```
-or if in Windows run the 'cleanup.bat' file
+or if in Windows run the 'cleanup.bat' file in folder 'run'
