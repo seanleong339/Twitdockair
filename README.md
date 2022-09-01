@@ -1,6 +1,6 @@
 # Twitdockair
 
-Twitdockair is a simple ETL project I started to familiarise with setting up Apache Airflow on Docker, as well as utilising Airflow as an orchestrator to build DAGs for a data pipeline. The current schedule of the pipeline is set to run every hour, and extracts 100 tweets at a time. 
+Twitdockair is a basic ETL project I started to familiarise with setting up Apache Airflow on Docker, as well as utilising Airflow as an orchestrator to build DAGs for a data pipeline. The current schedule of the pipeline is set to run every hour, and extracts 100 tweets at a time. 
 
 ![alt text](https://github.com/seanleong339/Twitdockair/blob/main/images/ui.PNG "ui")
 
